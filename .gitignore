@@ -1,0 +1,25 @@
+# macOS metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# Java / Maven build targets
+target/
+*.jar
+*.war
+*.class
+.mvn/wrapper/maven-wrapper.jar
+
+# Node / Frontend (for flowpulse-ui later)
+node_modules/
+dist/
+.env.local
+
+# Logs and system files
+*.log
