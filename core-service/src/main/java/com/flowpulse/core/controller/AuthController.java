@@ -2,6 +2,7 @@ package com.flowpulse.core.controller;
 
 import com.flowpulse.core.dto.auth.AuthResponse;
 import com.flowpulse.core.dto.auth.LoginRequest;
+import com.flowpulse.core.dto.auth.RefreshTokenRequest;
 import com.flowpulse.core.dto.auth.RegisterRequest;
 import com.flowpulse.core.service.AuthService;
 import jakarta.validation.Valid;
@@ -29,6 +30,12 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse response = authService.login(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthResponse> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
+        AuthResponse response = authService.refreshToken(request);
         return ResponseEntity.ok(response);
     }
 }

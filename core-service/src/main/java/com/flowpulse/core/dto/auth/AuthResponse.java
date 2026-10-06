@@ -12,7 +12,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class AuthResponse {
 
-    private String token;
+//    private String token;
+    private String token;          // Short-lived Access Token
+    private String refreshToken;   // Long-lived Refresh Token
     
     @Builder.Default
     private String tokenType = "Bearer";
