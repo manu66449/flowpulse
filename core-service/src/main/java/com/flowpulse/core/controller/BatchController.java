@@ -5,6 +5,10 @@ import com.flowpulse.core.domain.User;
 import com.flowpulse.core.repository.UserRepository;
 import com.flowpulse.core.service.BatchService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -38,5 +42,24 @@ public class BatchController {
 
         PayoutBatch savedBatch = batchService.uploadAndProcessBatch(file, currentUser);
         return ResponseEntity.status(HttpStatus.CREATED).body(savedBatch);
+    }
+
+    @GetMapping
+    @PreAuthorize("hasAnyAuthority('ROLE_MANAGER', 'ROLE_ACCOUNTANT')")
+    public ResponseEntity<Page<PayoutBatch>> getAllBatches(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Page<PayoutBatch> batches = batchService.getBatches(pageable);
+        return ResponseEntity.ok(batches);
+    }
+
+    // --- NEW: Get single batch details by ID ---
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('ROLE_MANAGER', 'ROLE_ACCOUNTANT')")
+    public ResponseEntity<PayoutBatch> getBatchById(@PathVariable Long id) {
+        PayoutBatch batch = batchService.getBatchById(id);
+        return ResponseEntity.ok(batch);
     }
 }

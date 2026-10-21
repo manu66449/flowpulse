@@ -3,6 +3,8 @@ package com.flowpulse.core.service;
 import com.flowpulse.core.domain.*;
 import com.flowpulse.core.repository.PayoutBatchRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -79,5 +81,15 @@ public class BatchService {
 
         // 4. Save parent batch (and cascading child items) to PostgreSQL
         return batchRepository.save(batch);
+    }
+
+
+    public Page<PayoutBatch> getBatches(Pageable pageable) {
+        return batchRepository.findAll(pageable);
+    }
+
+    public PayoutBatch getBatchById(Long id) {
+        return batchRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Payout batch not found with ID: " + id));
     }
 }
