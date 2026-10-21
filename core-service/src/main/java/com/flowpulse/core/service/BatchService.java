@@ -110,4 +110,19 @@ public class BatchService {
 
         return batchRepository.save(batch);
     }
+
+    @Transactional
+    public PayoutBatch rejectBatch(Long batchId, User currentManager) {
+        PayoutBatch batch = getBatchById(batchId);
+
+        // Ensure the batch is in a state that can be rejected
+        if (batch.getStatus() != BatchStatus.DRAFT && batch.getStatus() != BatchStatus.PENDING_APPROVAL) {
+            throw new IllegalStateException("Batch cannot be rejected because its current status is: " + batch.getStatus());
+        }
+
+        batch.setStatus(BatchStatus.REJECTED);
+        // Note: updatedAt will be automatically refreshed by your entity's @PreUpdate lifecycle hook
+
+        return batchRepository.save(batch);
+    }
 }

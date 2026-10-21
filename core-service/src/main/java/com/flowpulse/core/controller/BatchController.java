@@ -77,4 +77,18 @@ public class BatchController {
         PayoutBatch approvedBatch = batchService.approveBatch(id, currentManager);
         return ResponseEntity.ok(approvedBatch);
     }
+
+    @PatchMapping("/{id}/reject")
+    @PreAuthorize("hasAuthority('ROLE_MANAGER')")
+    public ResponseEntity<PayoutBatch> rejectBatch(
+            @PathVariable Long id,
+            Authentication authentication) {
+
+        String email = authentication.getName();
+        User currentManager = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Authenticated user not found in database: " + email));
+
+        PayoutBatch rejectedBatch = batchService.rejectBatch(id, currentManager);
+        return ResponseEntity.ok(rejectedBatch);
+    }
 }
