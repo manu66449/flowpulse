@@ -20,6 +20,7 @@ public class PayoutItem {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "batch_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonBackReference
     private PayoutBatch batch;
 
     @Column(name = "vendor_name", nullable = false, length = 200)

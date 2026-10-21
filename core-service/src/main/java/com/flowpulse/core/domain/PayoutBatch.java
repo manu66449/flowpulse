@@ -52,6 +52,7 @@ public class PayoutBatch {
     private OffsetDateTime updatedAt;
 
     @OneToMany(mappedBy = "batch", cascade = CascadeType.ALL, orphanRemoval = true)
+    @com.fasterxml.jackson.annotation.JsonManagedReference
     @Builder.Default
     private List<PayoutItem> items = new ArrayList<>();
 
