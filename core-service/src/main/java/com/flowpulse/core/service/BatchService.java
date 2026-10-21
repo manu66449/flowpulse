@@ -3,8 +3,10 @@ package com.flowpulse.core.service;
 import com.flowpulse.core.domain.*;
 import com.flowpulse.core.repository.PayoutBatchRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -16,6 +18,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BatchService {
@@ -124,5 +127,54 @@ public class BatchService {
         // Note: updatedAt will be automatically refreshed by your entity's @PreUpdate lifecycle hook
 
         return batchRepository.save(batch);
+    }
+
+    @Async("payoutTaskExecutor") // Tells Spring to run this method on our custom thread pool
+    @Transactional
+    public void processBatchAsync(Long batchId) {
+        log.info("Starting background payout processing for batch ID: {} on thread: {}", batchId, Thread.currentThread().getName());
+
+        PayoutBatch batch = getBatchById(batchId);
+
+        // 1. Verify batch is APPROVED before processing
+        if (batch.getStatus() != BatchStatus.APPROVED) {
+            log.error("Batch ID {} cannot be processed because its status is {}", batchId, batch.getStatus());
+            return;
+        }
+
+        // 2. Transition batch status to PROCESSING
+        batch.setStatus(BatchStatus.PROCESSING);
+        batchRepository.save(batch);
+
+        boolean hasFailures = false;
+
+        // 3. Iterate through each item and simulate bank gateway processing
+        for (PayoutItem item : batch.getItems()) {
+            try {
+                item.setStatus(ItemStatus.PROCESSING);
+                // Simulate network latency / external bank API call (e.g., NEFT/IMPS call)
+                Thread.sleep(1000);
+
+                // Simulation rule: For testing, let's mark it SUCCESS
+                item.setStatus(ItemStatus.SUCCESS);
+                item.setProcessedAt(OffsetDateTime.now());
+
+            } catch (Exception e) {
+                log.error("Failed to process payout item {}: {}", item.getId(), e.getMessage());
+                item.setStatus(ItemStatus.FAILED);
+                item.setFailureReason(e.getMessage());
+                hasFailures = true;
+            }
+        }
+
+        // 4. Finalize batch status based on item results
+        if (hasFailures) {
+            batch.setStatus(BatchStatus.FAILED);
+        } else {
+            batch.setStatus(BatchStatus.COMPLETED);
+        }
+
+        batchRepository.save(batch);
+        log.info("Finished processing batch ID {}. Final Status: {}", batchId, batch.getStatus());
     }
 }

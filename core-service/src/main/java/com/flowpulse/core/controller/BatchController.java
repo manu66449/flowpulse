@@ -91,4 +91,15 @@ public class BatchController {
         PayoutBatch rejectedBatch = batchService.rejectBatch(id, currentManager);
         return ResponseEntity.ok(rejectedBatch);
     }
+
+    @PostMapping("/{id}/process")
+    @PreAuthorize("hasAuthority('ROLE_MANAGER')")
+    public ResponseEntity<String> triggerBatchProcessing(@PathVariable Long id) {
+        // Trigger the async worker method
+        batchService.processBatchAsync(id);
+
+        // Return 202 Accepted immediately
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body("Batch processing initiated successfully in the background for ID: " + id);
+    }
 }
