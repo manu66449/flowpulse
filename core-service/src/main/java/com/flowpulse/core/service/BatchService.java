@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import java.time.OffsetDateTime;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -91,5 +92,22 @@ public class BatchService {
     public PayoutBatch getBatchById(Long id) {
         return batchRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Payout batch not found with ID: " + id));
+    }
+
+
+    @Transactional
+    public PayoutBatch approveBatch(Long batchId, User currentManager) {
+        PayoutBatch batch = getBatchById(batchId);
+
+        // Ensure the batch is in a state that can be approved
+        if (batch.getStatus() != BatchStatus.DRAFT && batch.getStatus() != BatchStatus.PENDING_APPROVAL) {
+            throw new IllegalStateException("Batch cannot be approved because its current status is: " + batch.getStatus());
+        }
+
+        batch.setStatus(BatchStatus.APPROVED);
+        batch.setApprovedBy(currentManager);
+        batch.setApprovedAt(OffsetDateTime.now());
+
+        return batchRepository.save(batch);
     }
 }

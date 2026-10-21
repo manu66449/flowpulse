@@ -62,4 +62,19 @@ public class BatchController {
         PayoutBatch batch = batchService.getBatchById(id);
         return ResponseEntity.ok(batch);
     }
+
+    // Add this endpoint inside BatchController class:
+    @PatchMapping("/{id}/approve")
+    @PreAuthorize("hasAuthority('ROLE_MANAGER')")
+    public ResponseEntity<PayoutBatch> approveBatch(
+            @PathVariable Long id,
+            Authentication authentication) {
+
+        String email = authentication.getName();
+        User currentManager = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Authenticated user not found in database: " + email));
+
+        PayoutBatch approvedBatch = batchService.approveBatch(id, currentManager);
+        return ResponseEntity.ok(approvedBatch);
+    }
 }
