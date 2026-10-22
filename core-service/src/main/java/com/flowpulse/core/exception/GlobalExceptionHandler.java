@@ -4,10 +4,14 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.OffsetDateTime;
+import java.util.HashMap;
+import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -62,5 +66,47 @@ public class GlobalExceptionHandler {
                 .path(request.getRequestURI())
                 .build();
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+    }
+
+    // This can be used if request body field is not valid. Ex:
+//    public class PayoutItemRequestDto {
+//
+//        @NotBlank(message = "Vendor name is mandatory")
+//        private String vendorName;
+//
+//        @Positive(message = "Payout amount must be greater than zero")
+//        private BigDecimal amount;
+//
+//        @NotBlank(message = "IFSC code is required")
+//        private String ifscCode;
+//    }
+
+//    @PostMapping("/item")
+//@PreAuthorize("hasAuthority('ROLE_MANAGER')")
+//public ResponseEntity<PayoutItem> addPayoutItem(
+//        @Valid @RequestBody PayoutItemRequestDto requestDto) {
+//    // If validation fails, Spring throws MethodArgumentNotValidException BEFORE reaching this line
+//
+//    // ... business logic ...
+//}
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidationExceptions(
+            MethodArgumentNotValidException ex, HttpServletRequest request) {
+
+        // Collect all specific field validation errors into a map
+        Map<String, String> fieldErrors = new HashMap<>();
+        for (FieldError error : ex.getBindingResult().getFieldErrors()) {
+            fieldErrors.put(error.getField(), error.getDefaultMessage());
+        }
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(OffsetDateTime.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error("Validation Failed")
+                .message("Invalid request payload. Details: " + fieldErrors.toString())
+                .path(request.getRequestURI())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
     }
 }
