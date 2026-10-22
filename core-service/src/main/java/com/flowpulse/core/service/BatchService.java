@@ -1,6 +1,7 @@
 package com.flowpulse.core.service;
 
 import com.flowpulse.core.domain.*;
+import com.flowpulse.core.repository.AuditLogRepository;
 import com.flowpulse.core.repository.PayoutBatchRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ public class BatchService {
 
     private final PayoutBatchRepository batchRepository;
     private final AuditService auditService;
+    private final AuditLogRepository auditLogRepository; // Ensure this is injected via @RequiredArgsConstructor
 
     @Transactional
     public PayoutBatch uploadAndProcessBatch(MultipartFile file, User currentUser) {
@@ -187,5 +189,13 @@ public class BatchService {
 
         batchRepository.save(batch);
         log.info("Finished processing batch ID {}. Final Status: {}", batchId, batch.getStatus());
+    }
+
+    public List<AuditLog> getBatchAuditLogs(Long batchId) {
+        // Verify the batch exists first (throws exception if ID is invalid)
+        getBatchById(batchId);
+
+        // Fetch audit logs matching entity name "PayoutBatch" and the specific ID
+        return auditLogRepository.findByEntityNameAndEntityIdOrderByTimestampDesc("PayoutBatch", batchId);
     }
 }

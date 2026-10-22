@@ -1,5 +1,6 @@
 package com.flowpulse.core.controller;
 
+import com.flowpulse.core.domain.AuditLog;
 import com.flowpulse.core.domain.PayoutBatch;
 import com.flowpulse.core.domain.User;
 import com.flowpulse.core.repository.UserRepository;
@@ -16,6 +17,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/batches")
@@ -101,5 +104,12 @@ public class BatchController {
         // Return 202 Accepted immediately
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body("Batch processing initiated successfully in the background for ID: " + id);
+    }
+
+    @GetMapping("/{id}/audit-logs")
+    @PreAuthorize("hasAnyAuthority('ROLE_MANAGER', 'ROLE_ACCOUNTANT')")
+    public ResponseEntity<List<AuditLog>> getBatchAuditLogs(@PathVariable Long id) {
+        List<AuditLog> auditLogs = batchService.getBatchAuditLogs(id);
+        return ResponseEntity.ok(auditLogs);
     }
 }
