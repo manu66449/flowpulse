@@ -2,6 +2,9 @@ package com.flowpulse.core.domain;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import java.time.OffsetDateTime;
 
 @Entity
@@ -31,9 +34,11 @@ public class AuditLog {
     private User performedBy;
 
     // We map PostgreSQL JSONB columns as String in Java (or use Jackson JsonNode later)
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "old_state", columnDefinition = "jsonb")
     private String oldState;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "new_state", columnDefinition = "jsonb")
     private String newState;
 
