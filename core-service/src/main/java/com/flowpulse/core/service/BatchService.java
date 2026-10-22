@@ -24,6 +24,7 @@ import java.util.List;
 public class BatchService {
 
     private final PayoutBatchRepository batchRepository;
+    private final AuditService auditService;
 
     @Transactional
     public PayoutBatch uploadAndProcessBatch(MultipartFile file, User currentUser) {
@@ -84,7 +85,10 @@ public class BatchService {
         batch.getItems().addAll(items);
 
         // 4. Save parent batch (and cascading child items) to PostgreSQL
-        return batchRepository.save(batch);
+        PayoutBatch savedBatch = batchRepository.save(batch);
+        auditService.logAction("PayoutBatch", savedBatch.getId(), "UPLOAD", currentUser, null, "{\"status\": \"DRAFT\"}");
+//        auditService.logAction("PayoutBatch", savedBatch.getId(), "UPLOAD", currentUser, null, "Batch created with status DRAFT");
+        return savedBatch;
     }
 
 
@@ -101,7 +105,7 @@ public class BatchService {
     @Transactional
     public PayoutBatch approveBatch(Long batchId, User currentManager) {
         PayoutBatch batch = getBatchById(batchId);
-
+        String oldStatus = batch.getStatus().name();
         // Ensure the batch is in a state that can be approved
         if (batch.getStatus() != BatchStatus.DRAFT && batch.getStatus() != BatchStatus.PENDING_APPROVAL) {
             throw new IllegalStateException("Batch cannot be approved because its current status is: " + batch.getStatus());
@@ -111,12 +115,16 @@ public class BatchService {
         batch.setApprovedBy(currentManager);
         batch.setApprovedAt(OffsetDateTime.now());
 
-        return batchRepository.save(batch);
+        PayoutBatch updatedBatch = batchRepository.save(batch);
+        auditService.logAction("PayoutBatch", batchId, "APPROVE", currentManager, "{\"status\": \"" + oldStatus + "\"}", "{\"status\": \"APPROVED\"}");
+//        auditService.logAction("PayoutBatch", batchId, "APPROVE", currentManager, "Status: " + oldStatus, "Status: APPROVED");
+        return updatedBatch;
     }
 
     @Transactional
     public PayoutBatch rejectBatch(Long batchId, User currentManager) {
         PayoutBatch batch = getBatchById(batchId);
+        String oldStatus = batch.getStatus().name();
 
         // Ensure the batch is in a state that can be rejected
         if (batch.getStatus() != BatchStatus.DRAFT && batch.getStatus() != BatchStatus.PENDING_APPROVAL) {
@@ -126,7 +134,10 @@ public class BatchService {
         batch.setStatus(BatchStatus.REJECTED);
         // Note: updatedAt will be automatically refreshed by your entity's @PreUpdate lifecycle hook
 
-        return batchRepository.save(batch);
+        PayoutBatch updatedBatch = batchRepository.save(batch);
+        auditService.logAction("PayoutBatch", batchId, "REJECT", currentManager, "{\"status\": \"" + oldStatus + "\"}", "{\"status\": \"REJECTED\"}");
+//        auditService.logAction("PayoutBatch", batchId, "REJECT", currentManager, "Status: " + oldStatus, "Status: REJECTED");
+        return updatedBatch;
     }
 
     @Async("payoutTaskExecutor") // Tells Spring to run this method on our custom thread pool
