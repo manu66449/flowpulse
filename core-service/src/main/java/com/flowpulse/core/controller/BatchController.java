@@ -1,7 +1,6 @@
 package com.flowpulse.core.controller;
 
 import com.flowpulse.core.domain.AuditLog;
-import com.flowpulse.core.domain.PayoutBatch;
 import com.flowpulse.core.domain.User;
 import com.flowpulse.core.dto.response.PayoutBatchResponseDto;
 import com.flowpulse.core.repository.UserRepository;
@@ -15,7 +14,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -31,35 +29,33 @@ public class BatchController {
 
     @PostMapping("/upload")
     @PreAuthorize("hasAuthority('ROLE_MANAGER')")
-    public ResponseEntity<PayoutBatch> uploadBatch(
+    public ResponseEntity<PayoutBatchResponseDto> uploadBatch(
             @RequestParam("file") MultipartFile file,
-            Authentication authentication) { // Get standard Authentication object
+            Authentication authentication) {
 
         if (file.isEmpty()) {
             throw new IllegalArgumentException("Please upload a valid CSV file.");
         }
 
-        // Safely extract email and fetch the real database User entity
         String email = authentication.getName();
         User currentUser = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Authenticated user not found in database: " + email));
 
-        PayoutBatch savedBatch = batchService.uploadAndProcessBatch(file, currentUser);
+        PayoutBatchResponseDto savedBatch = batchService.uploadAndProcessBatch(file, currentUser);
         return ResponseEntity.status(HttpStatus.CREATED).body(savedBatch);
     }
 
     @GetMapping
     @PreAuthorize("hasAnyAuthority('ROLE_MANAGER', 'ROLE_ACCOUNTANT')")
-    public ResponseEntity<Page<PayoutBatch>> getAllBatches(
+    public ResponseEntity<Page<PayoutBatchResponseDto>> getAllBatches(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<PayoutBatch> batches = batchService.getBatches(pageable);
+        Page<PayoutBatchResponseDto> batches = batchService.getBatches(pageable);
         return ResponseEntity.ok(batches);
     }
 
-    // --- NEW: Get single batch details by ID ---
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ROLE_MANAGER', 'ROLE_ACCOUNTANT')")
     public ResponseEntity<PayoutBatchResponseDto> getBatchById(@PathVariable Long id) {
@@ -67,10 +63,9 @@ public class BatchController {
         return ResponseEntity.ok(batch);
     }
 
-    // Add this endpoint inside BatchController class:
     @PatchMapping("/{id}/approve")
     @PreAuthorize("hasAuthority('ROLE_MANAGER')")
-    public ResponseEntity<PayoutBatch> approveBatch(
+    public ResponseEntity<PayoutBatchResponseDto> approveBatch(
             @PathVariable Long id,
             Authentication authentication) {
 
@@ -78,13 +73,13 @@ public class BatchController {
         User currentManager = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Authenticated user not found in database: " + email));
 
-        PayoutBatch approvedBatch = batchService.approveBatch(id, currentManager);
+        PayoutBatchResponseDto approvedBatch = batchService.approveBatch(id, currentManager);
         return ResponseEntity.ok(approvedBatch);
     }
 
     @PatchMapping("/{id}/reject")
     @PreAuthorize("hasAuthority('ROLE_MANAGER')")
-    public ResponseEntity<PayoutBatch> rejectBatch(
+    public ResponseEntity<PayoutBatchResponseDto> rejectBatch(
             @PathVariable Long id,
             Authentication authentication) {
 
@@ -92,17 +87,14 @@ public class BatchController {
         User currentManager = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Authenticated user not found in database: " + email));
 
-        PayoutBatch rejectedBatch = batchService.rejectBatch(id, currentManager);
+        PayoutBatchResponseDto rejectedBatch = batchService.rejectBatch(id, currentManager);
         return ResponseEntity.ok(rejectedBatch);
     }
 
     @PostMapping("/{id}/process")
     @PreAuthorize("hasAuthority('ROLE_MANAGER')")
     public ResponseEntity<String> triggerBatchProcessing(@PathVariable Long id) {
-        // Trigger the async worker method
         batchService.processBatchAsync(id);
-
-        // Return 202 Accepted immediately
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body("Batch processing initiated successfully in the background for ID: " + id);
     }

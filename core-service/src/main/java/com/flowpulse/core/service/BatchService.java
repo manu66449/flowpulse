@@ -30,11 +30,39 @@ public class BatchService {
     private final PayoutBatchRepository batchRepository;
     private final PayoutItemRepository payoutItemRepository;
     private final AuditService auditService;
-    private final AuditLogRepository auditLogRepository; // Ensure this is injected via @RequiredArgsConstructor
+    private final AuditLogRepository auditLogRepository;
     private final BankGatewayService bankGatewayService;
 
+    /**
+     * Centralized mapper helper to convert PayoutBatch entity to PayoutBatchResponseDto.
+     * @param batch The entity to convert
+     * @param includeItems Whether to include individual payout items (false for lists to optimize performance)
+     */
+    public PayoutBatchResponseDto mapToDto(PayoutBatch batch, boolean includeItems) {
+        List<PayoutItemResponseDto> itemDtos = (!includeItems || batch.getItems() == null) ? List.of() : batch.getItems().stream()
+                .map(item -> new PayoutItemResponseDto(
+                        item.getId(),
+                        item.getAmount(),
+                        item.getAccountNumber(),
+                        item.getStatus().name(),
+                        item.getFailureReason(),
+                        item.getProcessedAt()
+                ))
+                .toList();
+
+        return new PayoutBatchResponseDto(
+                batch.getId(),
+                batch.getTitle(),
+                batch.getTotalAmount(),
+                batch.getTotalRecords(),
+                batch.getStatus().name(),
+                batch.getCreatedAt(),
+                itemDtos
+        );
+    }
+
     @Transactional
-    public PayoutBatch uploadAndProcessBatch(MultipartFile file, User currentUser) {
+    public PayoutBatchResponseDto uploadAndProcessBatch(MultipartFile file, User currentUser) {
         List<PayoutItem> items = new ArrayList<>();
         BigDecimal totalAmount = BigDecimal.ZERO;
 
@@ -95,12 +123,15 @@ public class BatchService {
         PayoutBatch savedBatch = batchRepository.save(batch);
         auditService.logAction("PayoutBatch", savedBatch.getId(), "UPLOAD", currentUser, null, "{\"status\": \"DRAFT\"}");
 //        auditService.logAction("PayoutBatch", savedBatch.getId(), "UPLOAD", currentUser, null, "Batch created with status DRAFT");
-        return savedBatch;
+
+        return mapToDto(savedBatch, true);
     }
 
-
-    public Page<PayoutBatch> getBatches(Pageable pageable) {
-        return batchRepository.findAll(pageable);
+    @Transactional(readOnly = true)
+    public Page<PayoutBatchResponseDto> getBatches(Pageable pageable) {
+        Page<PayoutBatch> batchPage = batchRepository.findAll(pageable);
+        // Map page of entities to page of DTOs (omitting items list for list views to prevent N+1 queries)
+        return batchPage.map(batch -> mapToDto(batch, false));
     }
 
     public PayoutBatch getBatchById(Long id) {
@@ -108,37 +139,17 @@ public class BatchService {
                 .orElseThrow(() -> new IllegalArgumentException("Payout batch not found with ID: " + id));
     }
 
+    @Transactional(readOnly = true)
     public PayoutBatchResponseDto getBatchResponseById(Long id) {
-        PayoutBatch batch = batchRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Payout batch not found with id: " + id));
-
-        // Map items safely while the Hibernate session is open
-        List<PayoutItemResponseDto> itemDtos = batch.getItems().stream()
-                .map(item -> new PayoutItemResponseDto(
-                        item.getId(),
-                        item.getAmount(),
-                        item.getAccountNumber(), // <-- Fixed from getRecipientAccount()
-                        item.getStatus().name(),
-                        item.getFailureReason(),
-                        item.getProcessedAt()
-                ))
-                .toList();
-
-        return new PayoutBatchResponseDto(
-                batch.getId(),
-                batch.getTitle(),
-                batch.getTotalAmount(),
-                batch.getTotalRecords(),
-                batch.getStatus().name(),
-                batch.getCreatedAt(),
-                itemDtos
-        );
+        PayoutBatch batch = getBatchById(id);
+        return mapToDto(batch, true); // Include items detail for single view
     }
 
     @Transactional
-    public PayoutBatch approveBatch(Long batchId, User currentManager) {
+    public PayoutBatchResponseDto approveBatch(Long batchId, User currentManager) {
         PayoutBatch batch = getBatchById(batchId);
         String oldStatus = batch.getStatus().name();
+
         // Ensure the batch is in a state that can be approved
         if (batch.getStatus() != BatchStatus.DRAFT && batch.getStatus() != BatchStatus.PENDING_APPROVAL) {
             throw new IllegalStateException("Batch cannot be approved because its current status is: " + batch.getStatus());
@@ -151,11 +162,11 @@ public class BatchService {
         PayoutBatch updatedBatch = batchRepository.save(batch);
         auditService.logAction("PayoutBatch", batchId, "APPROVE", currentManager, "{\"status\": \"" + oldStatus + "\"}", "{\"status\": \"APPROVED\"}");
 //        auditService.logAction("PayoutBatch", batchId, "APPROVE", currentManager, "Status: " + oldStatus, "Status: APPROVED");
-        return updatedBatch;
+        return mapToDto(updatedBatch, true);
     }
 
     @Transactional
-    public PayoutBatch rejectBatch(Long batchId, User currentManager) {
+    public PayoutBatchResponseDto rejectBatch(Long batchId, User currentManager) {
         PayoutBatch batch = getBatchById(batchId);
         String oldStatus = batch.getStatus().name();
 
@@ -169,11 +180,11 @@ public class BatchService {
 
         PayoutBatch updatedBatch = batchRepository.save(batch);
         auditService.logAction("PayoutBatch", batchId, "REJECT", currentManager, "{\"status\": \"" + oldStatus + "\"}", "{\"status\": \"REJECTED\"}");
-//        auditService.logAction("PayoutBatch", batchId, "REJECT", currentManager, "Status: " + oldStatus, "Status: REJECTED");
-        return updatedBatch;
+
+        return mapToDto(updatedBatch, true);
     }
 
-    @Async("payoutTaskExecutor") // Tells Spring to run this method on our custom thread pool
+    @Async("payoutTaskExecutor")
     @Transactional
     public void processBatchAsync(Long batchId) {
         log.info("Starting background payout processing for batch ID: {} on thread: {}", batchId, Thread.currentThread().getName());
@@ -203,8 +214,7 @@ public class BatchService {
                 if (item.getStatus() == ItemStatus.FAILED) {
                     hasFailures = true;
                 }
-
-                payoutItemRepository.save(item); // Save individual item state update
+                payoutItemRepository.save(item);
 
             } catch (Exception e) {
                 log.error("Unexpected error processing payout item {}: {}", item.getId(), e.getMessage());
@@ -226,6 +236,7 @@ public class BatchService {
         log.info("Finished processing batch ID {}. Final Status: {}", batchId, batch.getStatus());
     }
 
+    @Transactional(readOnly = true)
     public List<AuditLog> getBatchAuditLogs(Long batchId) {
         // Verify the batch exists first (throws exception if ID is invalid)
         getBatchById(batchId);
