@@ -3,6 +3,7 @@ package com.flowpulse.core.controller;
 import com.flowpulse.core.domain.AuditLog;
 import com.flowpulse.core.domain.PayoutBatch;
 import com.flowpulse.core.domain.User;
+import com.flowpulse.core.dto.response.PayoutBatchResponseDto;
 import com.flowpulse.core.repository.UserRepository;
 import com.flowpulse.core.service.BatchService;
 import lombok.RequiredArgsConstructor;
@@ -61,8 +62,8 @@ public class BatchController {
     // --- NEW: Get single batch details by ID ---
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ROLE_MANAGER', 'ROLE_ACCOUNTANT')")
-    public ResponseEntity<PayoutBatch> getBatchById(@PathVariable Long id) {
-        PayoutBatch batch = batchService.getBatchById(id);
+    public ResponseEntity<PayoutBatchResponseDto> getBatchById(@PathVariable Long id) {
+        PayoutBatchResponseDto batch = batchService.getBatchResponseById(id);
         return ResponseEntity.ok(batch);
     }
 

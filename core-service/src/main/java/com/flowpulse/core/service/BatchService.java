@@ -1,8 +1,11 @@
 package com.flowpulse.core.service;
 
 import com.flowpulse.core.domain.*;
+import com.flowpulse.core.dto.response.PayoutBatchResponseDto;
+import com.flowpulse.core.dto.response.PayoutItemResponseDto;
 import com.flowpulse.core.repository.AuditLogRepository;
 import com.flowpulse.core.repository.PayoutBatchRepository;
+import com.flowpulse.core.repository.PayoutItemRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -25,8 +28,10 @@ import java.util.List;
 public class BatchService {
 
     private final PayoutBatchRepository batchRepository;
+    private final PayoutItemRepository payoutItemRepository;
     private final AuditService auditService;
     private final AuditLogRepository auditLogRepository; // Ensure this is injected via @RequiredArgsConstructor
+    private final BankGatewayService bankGatewayService;
 
     @Transactional
     public PayoutBatch uploadAndProcessBatch(MultipartFile file, User currentUser) {
@@ -103,6 +108,32 @@ public class BatchService {
                 .orElseThrow(() -> new IllegalArgumentException("Payout batch not found with ID: " + id));
     }
 
+    public PayoutBatchResponseDto getBatchResponseById(Long id) {
+        PayoutBatch batch = batchRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Payout batch not found with id: " + id));
+
+        // Map items safely while the Hibernate session is open
+        List<PayoutItemResponseDto> itemDtos = batch.getItems().stream()
+                .map(item -> new PayoutItemResponseDto(
+                        item.getId(),
+                        item.getAmount(),
+                        item.getAccountNumber(), // <-- Fixed from getRecipientAccount()
+                        item.getStatus().name(),
+                        item.getFailureReason(),
+                        item.getProcessedAt()
+                ))
+                .toList();
+
+        return new PayoutBatchResponseDto(
+                batch.getId(),
+                batch.getTitle(),
+                batch.getTotalAmount(),
+                batch.getTotalRecords(),
+                batch.getStatus().name(),
+                batch.getCreatedAt(),
+                itemDtos
+        );
+    }
 
     @Transactional
     public PayoutBatch approveBatch(Long batchId, User currentManager) {
@@ -161,22 +192,26 @@ public class BatchService {
 
         boolean hasFailures = false;
 
-        // 3. Iterate through each item and simulate bank gateway processing
+        // 3. Iterate through each item and process via BankGatewayService (with built-in retry)
         for (PayoutItem item : batch.getItems()) {
             try {
                 item.setStatus(ItemStatus.PROCESSING);
-                // Simulate network latency / external bank API call (e.g., NEFT/IMPS call)
-                Thread.sleep(1000);
 
-                // Simulation rule: For testing, let's mark it SUCCESS
-                item.setStatus(ItemStatus.SUCCESS);
-                item.setProcessedAt(OffsetDateTime.now());
+                // Delegate to BankGatewayService so Spring Retry proxy intercepts it
+                bankGatewayService.processBankTransfer(item);
+
+                if (item.getStatus() == ItemStatus.FAILED) {
+                    hasFailures = true;
+                }
+
+                payoutItemRepository.save(item); // Save individual item state update
 
             } catch (Exception e) {
-                log.error("Failed to process payout item {}: {}", item.getId(), e.getMessage());
+                log.error("Unexpected error processing payout item {}: {}", item.getId(), e.getMessage());
                 item.setStatus(ItemStatus.FAILED);
                 item.setFailureReason(e.getMessage());
                 hasFailures = true;
+                payoutItemRepository.save(item);
             }
         }
 
