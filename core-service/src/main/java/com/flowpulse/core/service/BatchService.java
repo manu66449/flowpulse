@@ -184,9 +184,10 @@ public class BatchService {
         return mapToDto(updatedBatch, true);
     }
 
-    @Async("payoutTaskExecutor")
+//    @Async("payoutTaskExecutor")  : Now instead of manually handling batchProcessing using jvm threadpool, we are handling this to RabbitMQ
+//    public void processBatchAsync(Long batchId) {
     @Transactional
-    public void processBatchAsync(Long batchId) {
+    public void processBatch(Long batchId) {
         log.info("Starting background payout processing for batch ID: {} on thread: {}", batchId, Thread.currentThread().getName());
 
         PayoutBatch batch = getBatchById(batchId);

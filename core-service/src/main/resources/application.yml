@@ -5,6 +5,12 @@ spring:
   application:
     name: flowpulse-core-service
 
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+
   datasource:
     url: jdbc:postgresql://localhost:5432/flowpulse_db
     username: flowpulse_user
@@ -37,3 +43,5 @@ application:
       secret-key: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
       # 86400000 ms = 24 hours
       expiration: 86400000
+
+
