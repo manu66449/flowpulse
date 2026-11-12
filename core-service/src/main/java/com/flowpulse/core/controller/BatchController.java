@@ -4,6 +4,7 @@ import com.flowpulse.core.domain.AuditLog;
 import com.flowpulse.core.domain.User;
 import com.flowpulse.core.dto.response.PayoutBatchResponseDto;
 import com.flowpulse.core.repository.UserRepository;
+import com.flowpulse.core.service.BatchProducerService;
 import com.flowpulse.core.service.BatchService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -26,6 +27,7 @@ public class BatchController {
 
     private final BatchService batchService;
     private final UserRepository userRepository;
+    private final BatchProducerService batchProducerService;
 
     @PostMapping("/upload")
     @PreAuthorize("hasAuthority('ROLE_MANAGER')")
@@ -94,7 +96,11 @@ public class BatchController {
     @PostMapping("/{id}/process")
     @PreAuthorize("hasAuthority('ROLE_MANAGER')")
     public ResponseEntity<String> triggerBatchProcessing(@PathVariable Long id) {
-        batchService.processBatchAsync(id);
+//     v1   batchService.processBatchAsync(id);
+//     v2   Publish message to RabbitMQ instead of local thread pool
+//        batchProducerService.sendBatchForProcessing(id);
+        batchService.initiateProcessing(id);
+
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body("Batch processing initiated successfully in the background for ID: " + id);
     }

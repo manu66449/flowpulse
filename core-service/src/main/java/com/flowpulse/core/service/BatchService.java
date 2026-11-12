@@ -32,6 +32,7 @@ public class BatchService {
     private final AuditService auditService;
     private final AuditLogRepository auditLogRepository;
     private final BankGatewayService bankGatewayService;
+    private final BatchProducerService batchProducer;
 
     /**
      * Centralized mapper helper to convert PayoutBatch entity to PayoutBatchResponseDto.
@@ -184,18 +185,33 @@ public class BatchService {
         return mapToDto(updatedBatch, true);
     }
 
-    @Async("payoutTaskExecutor")
+    // this method performs the guard check before talking to RabbitMQ
     @Transactional
-    public void processBatchAsync(Long batchId) {
+    public void initiateProcessing(Long batchId) {
+        PayoutBatch batch = getBatchById(batchId);
+
+        // Fail fast: Validate status before publishing to RabbitMQ
+        if (batch.getStatus() != BatchStatus.APPROVED) {
+            throw new IllegalStateException("Batch ID " + batchId + " cannot be processed because its current status is: " + batch.getStatus());
+        }
+
+        // Status is valid, now publish to RabbitMQ
+        batchProducer.sendBatchForProcessing(batchId);
+    }
+
+//    @Async("payoutTaskExecutor")  : Now instead of manually handling batchProcessing using jvm threadpool, we are handling this to RabbitMQ
+//    public void processBatchAsync(Long batchId) {
+    @Transactional
+    public void processBatch(Long batchId) {
         log.info("Starting background payout processing for batch ID: {} on thread: {}", batchId, Thread.currentThread().getName());
 
         PayoutBatch batch = getBatchById(batchId);
 
-        // 1. Verify batch is APPROVED before processing
-        if (batch.getStatus() != BatchStatus.APPROVED) {
-            log.error("Batch ID {} cannot be processed because its status is {}", batchId, batch.getStatus());
-            return;
-        }
+//        // 1. Verify batch is APPROVED before processing    -----already getting handled in initiateProcessing()
+//        if (batch.getStatus() != BatchStatus.APPROVED) {
+//            log.error("Batch ID {} cannot be processed because its status is {}", batchId, batch.getStatus());
+//            return;
+//        }
 
         // 2. Transition batch status to PROCESSING
         batch.setStatus(BatchStatus.PROCESSING);
