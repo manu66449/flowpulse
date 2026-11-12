@@ -96,9 +96,11 @@ public class BatchController {
     @PostMapping("/{id}/process")
     @PreAuthorize("hasAuthority('ROLE_MANAGER')")
     public ResponseEntity<String> triggerBatchProcessing(@PathVariable Long id) {
-//        batchService.processBatchAsync(id);
-        // Publish message to RabbitMQ instead of local thread pool
-        batchProducerService.sendBatchForProcessing(id);
+//     v1   batchService.processBatchAsync(id);
+//     v2   Publish message to RabbitMQ instead of local thread pool
+//        batchProducerService.sendBatchForProcessing(id);
+        batchService.initiateProcessing(id);
+
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body("Batch processing initiated successfully in the background for ID: " + id);
     }
